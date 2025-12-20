@@ -20,19 +20,28 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y build-essential gcc make binutils bc \
             flex bison libssl-dev libncurses-dev libelf-dev libdw-dev \
-            dwarves pahole fakeroot rsync zstd ccache clang llvm lld
+            dwarves pahole fakeroot rsync zstd ccache clang llvm lld \
+            grub-pc-bin grub-common xorriso cpio
 
     - name: Configure kernel
-      run: make O=build defconfig
+      run: make O=build x86_64_defconfig
 
     - name: Build kernel
-      run: make O=build -j$(nproc)
+      run: make O=build -j$(nproc) bzImage
 
-    - name: Package kernel
-      run: make O=build -j$(nproc) bindeb-pkg
+    - name: Build initramfs
+      run: |
+        mkdir -p initramfs/{bin,etc,proc,sys}
+        echo '#!/bin/sh' > initramfs/init
+        echo 'mount -t proc none /proc' >> initramfs/init
+        echo 'exec /bin/sh' >> initramfs/init
+        chmod +x initramfs/init
+        cd initramfs && find . | cpio -o -H newc | gzip > ../initramfs.img
 
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: kernel-debs
-        path: ../*.deb
+        name: kernel-build
+        path: |
+          build/arch/x86/boot/bzImage
+          initramfs.img
